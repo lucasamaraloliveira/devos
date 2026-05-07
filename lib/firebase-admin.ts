@@ -22,10 +22,10 @@ export function createFirebaseAdminApp() {
 
 export const adminDb = () => {
   const app = createFirebaseAdminApp();
-  return admin.firestore(app);
+  return admin.firestore(app || undefined);
 };
 
 export const adminAuth = () => {
   const app = createFirebaseAdminApp();
-  return admin.auth(app);
+  return admin.auth(app || undefined);
 };
