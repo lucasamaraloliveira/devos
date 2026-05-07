@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Schema validation for "system" entity
+    function isValidSystem(data) {
+      return data.keys().hasAll(['name', 'language', 'ownerId', 'technicalDebt', 'status', 'healthScore'])
+        && data.name is string && data.name.size() <= 100
+        && data.language is string && data.language.size() <= 50
+        && data.ownerId == request.auth.uid
+        && data.technicalDebt is number && data.technicalDebt >= 0 && data.technicalDebt <= 100
+        && data.status is string && data.status.size() <= 20
+        && data.healthScore is number && data.healthScore >= 0 && data.healthScore <= 100;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Systems collection rules
+    match /systems/{systemId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() 
+        && isValidId(systemId) 
+        && isValidSystem(incoming());
+      allow update: if isSignedIn() 
+        && isValidSystem(incoming())
+        && incoming().ownerId == existing().ownerId;
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "system": {
+      "title": "Sistema",
+      "properties": {
+        "name": { "type": "string" },
+        "language": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "technicalDebt": { "type": "number" },
+        "status": { "type": "string" },
+        "healthScore": { "type": "number" }
+      },
+      "required": ["name", "language", "ownerId"]
+    }
+  },
+  "firestore": {
+    "systems": {
+      "schema": "system",
+      "description": "Software assets"
+    }
+  }
+}
