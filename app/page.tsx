@@ -21,19 +21,17 @@ import {
   BrainCircuit,
   TrendingDown,
   Activity,
-  ArrowUpRight
+  ArrowUpRight,
+  Download,
+  Check,
+  Rocket,
+  Flame
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 
-// Constantes de cores do tema
-const COLORS = {
-  emerald: '#10b981',
-  cyan: '#06b6d4',
-  amber: '#f59e0b',
-  slate: '#64748b',
-  border: 'rgba(255,255,255,0.05)'
-};
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
 
 const efficiencyData = [
   { name: 'Jan', lead: 12, cycle: 5 },
@@ -50,7 +48,84 @@ const cloudCostsData = [
   { name: 'S4', cost: 1600 },
 ];
 
+
 export default function DashboardPage() {
+  const [isExporting, setIsExporting] = React.useState(false);
+  const [systems, setSystems] = React.useState<any[]>([]);
+  const [talents, setTalents] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    // Sincronizar Sistemas
+    const qSystems = query(collection(db, 'systems'));
+    const unsubSystems = onSnapshot(qSystems, (snapshot) => {
+      setSystems(snapshot.docs.map(doc => doc.data()));
+    });
+
+    // Sincronizar Talentos
+    const qTalents = query(collection(db, 'talents'));
+    const unsubTalents = onSnapshot(qTalents, (snapshot) => {
+      setTalents(snapshot.docs.map(doc => doc.data()));
+      setLoading(false);
+    });
+
+    // Sincronizar DORA
+    const qDora = query(collection(db, 'dora_deployments'));
+    const unsubDora = onSnapshot(qDora, (snapshot) => {
+      setDoraData(snapshot.docs.map(doc => doc.data()));
+    });
+
+    // Sincronizar Incidentes
+    const qIncidents = query(collection(db, 'incidents'));
+    const unsubIncidents = onSnapshot(qIncidents, (snapshot) => {
+      setIncidentData(snapshot.docs.map(doc => doc.data()));
+    });
+
+    return () => {
+      unsubSystems();
+      unsubTalents();
+      unsubDora();
+      unsubIncidents();
+    };
+  }, []);
+
+  const [doraData, setDoraData] = React.useState<any[]>([]);
+  const [incidentData, setIncidentData] = React.useState<any[]>([]);
+
+  const calculateGlobalHealth = () => {
+    if (systems.length === 0) return 0;
+    const sum = systems.reduce((acc, sys) => acc + (sys.healthScore || 0), 0);
+    return (sum / systems.length).toFixed(1);
+  };
+
+  const handleExportVMS = () => {
+    setIsExporting(true);
+    
+    // Simulação de geração de arquivo
+    setTimeout(() => {
+      const headers = ['Periodo', 'Lead Time (dias)', 'Cycle Time (dias)'];
+      const csvContent = [
+        headers.join(','),
+        ...efficiencyData.map((row: { name: string; lead: number; cycle: number }) => 
+          `${row.name},${row.lead},${row.cycle}`
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `devos_vms_report_${new Date().getFullYear()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setIsExporting(false);
+    }, 800);
+  };
+
+  const healthScore = calculateGlobalHealth();
+
   return (
     <div className="flex flex-col min-h-full">
       {/* Header */}
@@ -64,12 +139,28 @@ export default function DashboardPage() {
           <div className="flex flex-col items-end">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Engineering Health Score</span>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-mono text-emerald-400 font-bold tracking-tighter italic">94.2%</span>
-              <span className="text-[10px] text-emerald-400/60 font-mono">+1.2% ↑</span>
+              <span className={cn(
+                "text-2xl font-mono font-bold tracking-tighter italic",
+                Number(healthScore) > 80 ? "text-emerald-400" : Number(healthScore) > 50 ? "text-amber-400" : "text-red-400"
+              )}>
+                {healthScore}%
+              </span>
+              <span className="text-[10px] text-slate-600 font-mono">Real-time</span>
             </div>
           </div>
           <div className="w-px h-10 bg-white/10"></div>
-          <button className="px-4 py-2 border border-white/10 bg-white/5 text-[10px] text-white uppercase tracking-widest hover:bg-white/10 transition-colors font-bold">Exportar VMS</button>
+          <button 
+            onClick={handleExportVMS}
+            disabled={isExporting}
+            className="px-4 py-2 border border-white/10 bg-white/5 text-[10px] text-white uppercase tracking-widest hover:bg-white/10 transition-all font-bold flex items-center gap-2 active:scale-95 disabled:opacity-50"
+          >
+            {isExporting ? (
+              <Check className="w-3 h-3 text-emerald-500" />
+            ) : (
+              <Download className="w-3 h-3" />
+            )}
+            {isExporting ? 'Exportado' : 'Exportar VMS'}
+          </button>
         </div>
       </header>
 
@@ -123,24 +214,6 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Metric 3: Cloud Costs */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="col-span-12 md:col-span-4 bg-[#0C0C0E] border border-white/5 p-6 rounded-sm flex flex-col justify-between"
-        >
-          <div>
-            <div className="flex justify-between items-start">
-              <span className="text-[11px] text-slate-500 uppercase tracking-widest font-mono font-bold">Cloud Burn Rate (FinOps)</span>
-              <DollarSign className="w-3 h-3 text-emerald-400" />
-            </div>
-            <div className="text-3xl font-mono text-white mt-2 font-bold tracking-tight">$14,204 <span className="text-sm text-emerald-400 font-bold">-2%</span></div>
-          </div>
-          <p className="text-[10px] text-slate-500 mt-4 italic font-mono uppercase tracking-tighter">
-            Distribuição: 72% AWS / 28% Supabase
-          </p>
-        </motion.div>
 
         {/* Value Stream Chart */}
         <div className="col-span-12 lg:col-span-8 bg-[#0C0C0E] border border-white/5 p-6 rounded-sm flex flex-col min-h-[350px]">
